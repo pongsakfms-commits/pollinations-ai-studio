@@ -103,6 +103,8 @@
                     <audio id="resultAudio" controls class="w-full"></audio>
                 </div>
             </div>
+            
+            <div id="audioFallbackLink" class="hidden w-full fade-in mt-4"></div>
 
         </div>
     </div>
@@ -123,6 +125,7 @@
             document.getElementById('imageContainer').classList.add('hidden');
             document.getElementById('resultText').classList.add('hidden');
             document.getElementById('audioContainer').classList.add('hidden');
+            document.getElementById('audioFallbackLink').classList.add('hidden');
             document.getElementById('placeholderText').classList.remove('hidden');
             document.getElementById('loading').classList.add('hidden');
             
@@ -169,7 +172,7 @@
             document.getElementById('mathAnswer').value = ''; 
         }
 
-      // --- 3. Main Generation Logic (Fixed Audio) ---
+        // --- 3. Main Generation Logic (Robust & Full) ---
         async function checkCaptchaAndGenerate() {
             const userAnswer = parseInt(document.getElementById('mathAnswer').value);
             const prompt = document.getElementById('promptInput').value.trim();
@@ -182,7 +185,7 @@
                 return;
             }
 
-            // UI Loading State
+            // UI Elements
             const loading = document.getElementById('loading');
             const placeholder = document.getElementById('placeholderText');
             const imgContainer = document.getElementById('imageContainer');
@@ -191,6 +194,7 @@
             const textRes = document.getElementById('resultText');
             const audioContainer = document.getElementById('audioContainer');
             const audioRes = document.getElementById('resultAudio');
+            const audioFallback = document.getElementById('audioFallbackLink');
 
             // Reset UI
             loading.classList.remove('hidden');
@@ -198,9 +202,10 @@
             imgContainer.classList.add('hidden');
             textRes.classList.add('hidden');
             audioContainer.classList.add('hidden');
+            audioFallback.classList.add('hidden');
             textRes.innerHTML = '';
             
-            // Stop previous audio if playing
+            // Stop previous audio
             audioRes.pause();
             audioRes.currentTime = 0;
 
@@ -208,9 +213,7 @@
             const seed = Math.floor(Math.random() * 999999);
 
             try {
-                // ------------------------------------------------
-                // 🖼️ MODE: IMAGE (ใช้ Fetch เหมือนเดิม เพื่อให้ Download ได้)
-                // ------------------------------------------------
+                // ---------------- IMAGE MODE ----------------
                 if (currentMode === 'image') {
                     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
                     
@@ -230,61 +233,65 @@
                     };
                 } 
                 
-                // ------------------------------------------------
-                // 📝 MODE: TEXT (ใช้ Fetch ปกติ)
-                // ------------------------------------------------
+                // ---------------- TEXT MODE ----------------
                 else if (currentMode === 'text') {
                     const response = await fetch(`https://text.pollinations.ai/${encodedPrompt}?seed=${seed}&model=openai`);
                     if(!response.ok) throw new Error("Text API Error");
-                    
                     const text = await response.text();
+                    
                     loading.classList.add('hidden');
                     textRes.classList.remove('hidden');
                     textRes.innerHTML = text.replace(/\n/g, '<br>');
                     generateMathQuestion();
                 } 
                 
-                // ------------------------------------------------
-                // 🎧 MODE: AUDIO (แก้กลับเป็น Direct Link เพื่อแก้ปัญหา CORS)
-                // ------------------------------------------------
+                // ---------------- AUDIO MODE ----------------
                 else if (currentMode === 'audio') {
                     const voice = document.getElementById('voiceSelect').value;
-                    // สร้าง URL ตรงๆ
                     const url = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&voice=${voice}&seed=${seed}`;
                     
-                    // ตั้งค่า src ให้เครื่องเล่นโดยตรง (ไม่ใช้ fetch)
+                    // ตั้งค่า src
                     audioRes.src = url;
                     
-                    // รอจนกว่าจะโหลดข้อมูลเบื้องต้นได้
+                    // กรณีโหลดสำเร็จ
                     audioRes.onloadeddata = () => {
                         loading.classList.add('hidden');
                         audioContainer.classList.remove('hidden');
-                        
-                        // พยายามเล่นเสียง
-                        audioRes.play().catch(e => {
-                            console.log("Autoplay blocked (User interaction needed)");
-                        });
+                        audioRes.play().catch(e => console.log("Autoplay blocked"));
                         generateMathQuestion();
                     };
 
-                    // ดัก Error ถ้าโหลดไม่ขึ้น
+                    // กรณี Error (API พัง หรือ Browser บล็อก) -> โชว์ปุ่ม Fallback
                     audioRes.onerror = () => {
-                        console.error("Audio Load Error");
-                        throwError();
+                        loading.classList.add('hidden');
+                        audioContainer.classList.add('hidden'); // ซ่อนตัวเล่นหลัก
+                        
+                        audioFallback.innerHTML = `
+                            <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg text-center shadow-sm">
+                                <p class="text-yellow-700 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Audio Playback Issue</p>
+                                <p class="text-sm text-yellow-600 mb-3">Your browser blocked the audio or the server is busy.</p>
+                                <a href="${url}" target="_blank" class="inline-block bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition font-bold shadow-md">
+                                    <i class="fa-solid fa-external-link-alt mr-2"></i> Click here to Listen
+                                </a>
+                            </div>
+                        `;
+                        audioFallback.classList.remove('hidden');
+                        generateMathQuestion();
                     };
                 }
 
             } catch (error) {
-                console.error("Generation Error:", error);
+                console.error("System Error:", error);
                 throwError();
             }
         }
+
         function throwError() {
             const loading = document.getElementById('loading');
             const placeholder = document.getElementById('placeholderText');
             loading.classList.add('hidden');
             placeholder.classList.remove('hidden');
-            placeholder.innerHTML = '<div class="text-red-500 font-bold p-4 bg-red-50 rounded-lg">⚠️ Error: Content could not be generated.<br><span class="text-xs font-normal text-red-400">Please try again or use a shorter prompt.</span></div>';
+            placeholder.innerHTML = '<div class="text-red-500 font-bold p-4 bg-red-50 rounded-lg">⚠️ System Error.<br><span class="text-xs font-normal text-red-400">Please try again or check your internet connection.</span></div>';
             generateMathQuestion();
         }
 
