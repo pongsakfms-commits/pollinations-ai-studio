@@ -28,6 +28,10 @@
 4.  Enter your prompt and solve the math challenge.
 5.  Click **Generate**.
 
+## 🚧 Known Issues / Roadmap
+- **Audio Generation:** The current API endpoint (`openai-audio`) is deprecated. We kept the UI logic for developers who want to integrate a new TTS (Text-to-Speech) provider.
+- **Contribution:** Feel free to fork and fix the audio integration!
+
 ## 🤝 Credits
 
 This project is made possible by the open-source community at **Pollinations.ai**.
