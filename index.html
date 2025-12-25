@@ -45,7 +45,7 @@
                        class="w-full border border-slate-300 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-sm resize-none text-base"></textarea>
             </div>
 
-            <div id="voiceSelectDiv" class="hidden animate-fade-in">
+            <div id="voiceSelectDiv" class="hidden fade-in">
                 <label class="block text-sm font-bold text-slate-700 mb-2">Select Voice Personality:</label>
                 <select id="voiceSelect" class="w-full border border-slate-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white cursor-pointer">
                     <option value="alloy">Alloy (Neutral & Balanced)</option>
@@ -89,7 +89,7 @@
 
             <div id="imageContainer" class="hidden w-full fade-in text-center">
                  <img id="resultImage" class="w-full h-auto rounded-lg shadow-md mb-3" alt="AI Result">
-                 <a id="downloadBtn" href="#" target="_blank" class="inline-block bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-black transition">
+                 <a id="downloadBtn" href="#" download="wisdom-ai-image.jpg" class="inline-block bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-black transition">
                     <i class="fa-solid fa-download mr-1"></i> Download Image
                  </a>
             </div>
@@ -99,6 +99,7 @@
             <div id="audioContainer" class="hidden w-full fade-in text-center">
                 <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex flex-col items-center">
                     <i class="fa-solid fa-wave-square text-indigo-500 text-3xl mb-3"></i>
+                    <p class="text-sm text-slate-500 mb-2">Listen to your AI Voice:</p>
                     <audio id="resultAudio" controls class="w-full"></audio>
                 </div>
             </div>
@@ -168,7 +169,7 @@
             document.getElementById('mathAnswer').value = ''; 
         }
 
-        // --- 3. Main Generation Logic ---
+        // --- 3. Main Generation Logic (Enhanced with Fetch) ---
         async function checkCaptchaAndGenerate() {
             const userAnswer = parseInt(document.getElementById('mathAnswer').value);
             const prompt = document.getElementById('promptInput').value.trim();
@@ -203,25 +204,39 @@
 
             try {
                 if (currentMode === 'image') {
+                    // Pollinations Image URL
                     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
-                    imgRes.src = url;
+                    
+                    // Fetch blob for better error handling & download support
+                    const response = await fetch(url);
+                    if(!response.ok) throw new Error("Image API Error");
+                    
+                    const blob = await response.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    
+                    imgRes.src = objectUrl;
                     imgRes.onload = () => {
                         loading.classList.add('hidden');
                         imgContainer.classList.remove('hidden');
-                        dlBtn.href = url;
-                        generateMathQuestion(); // Reset captcha for next turn
+                        
+                        // Setup Download Button
+                        dlBtn.href = objectUrl;
+                        dlBtn.download = `wisdom-ai-${seed}.jpg`;
+                        
+                        generateMathQuestion(); 
                     };
-                    imgRes.onerror = () => throwError();
                 } 
                 
                 else if (currentMode === 'text') {
+                    // Fetch Text
                     const response = await fetch(`https://text.pollinations.ai/${encodedPrompt}?seed=${seed}&model=openai`);
-                    if(!response.ok) throw new Error("API Error");
+                    if(!response.ok) throw new Error("Text API Error");
+                    
                     const text = await response.text();
                     
                     loading.classList.add('hidden');
                     textRes.classList.remove('hidden');
-                    // Simple formatting: replace newlines with <br>
+                    // Format lines
                     textRes.innerHTML = text.replace(/\n/g, '<br>');
                     generateMathQuestion();
                 } 
@@ -230,18 +245,29 @@
                     const voice = document.getElementById('voiceSelect').value;
                     const url = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&voice=${voice}`;
                     
-                    audioRes.src = url;
-                    audioRes.onloadeddata = () => {
-                        loading.classList.add('hidden');
-                        audioContainer.classList.remove('hidden');
-                        audioRes.play();
-                        generateMathQuestion();
-                    };
-                    audioRes.onerror = () => throwError();
+                    // Fetch Audio Blob
+                    const response = await fetch(url);
+                    if(!response.ok) throw new Error("Audio API Error");
+                    
+                    const blob = await response.blob();
+                    const audioObjectUrl = URL.createObjectURL(blob);
+                    
+                    audioRes.src = audioObjectUrl;
+                    
+                    loading.classList.add('hidden');
+                    audioContainer.classList.remove('hidden');
+                    
+                    // Try to auto-play
+                    try {
+                        await audioRes.play();
+                    } catch (e) {
+                        console.log("Auto-play prevented by browser, user must click play.");
+                    }
+                    generateMathQuestion();
                 }
 
             } catch (error) {
-                console.error(error);
+                console.error("Generation Error:", error);
                 throwError();
             }
         }
@@ -251,7 +277,7 @@
             const placeholder = document.getElementById('placeholderText');
             loading.classList.add('hidden');
             placeholder.classList.remove('hidden');
-            placeholder.innerHTML = '<span class="text-red-500 font-bold">Error generating content. Please try again.</span>';
+            placeholder.innerHTML = '<div class="text-red-500 font-bold p-4 bg-red-50 rounded-lg">⚠️ Error: Content could not be generated.<br><span class="text-xs font-normal text-red-400">Please try again or use a shorter prompt.</span></div>';
             generateMathQuestion();
         }
 
