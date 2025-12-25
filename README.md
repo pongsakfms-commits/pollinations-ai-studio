@@ -3,7 +3,7 @@
 **Wisdom AI Studio** is an all-in-one generative AI tool that runs directly in your browser. It leverages the power of [Pollinations.ai](https://pollinations.ai) to provide three core functionalities without requiring any API keys or backend setup.
 
 ![Project Preview](preview.png)
-*(Please replace this image with your actual screenshot)*
+
 
 ## ✨ Key Features
 
