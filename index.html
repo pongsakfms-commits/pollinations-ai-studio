@@ -169,7 +169,7 @@
             document.getElementById('mathAnswer').value = ''; 
         }
 
-        // --- 3. Main Generation Logic (Enhanced with Fetch) ---
+      // --- 3. Main Generation Logic (Fixed Audio) ---
         async function checkCaptchaAndGenerate() {
             const userAnswer = parseInt(document.getElementById('mathAnswer').value);
             const prompt = document.getElementById('promptInput').value.trim();
@@ -192,22 +192,28 @@
             const audioContainer = document.getElementById('audioContainer');
             const audioRes = document.getElementById('resultAudio');
 
+            // Reset UI
             loading.classList.remove('hidden');
             placeholder.classList.add('hidden');
             imgContainer.classList.add('hidden');
             textRes.classList.add('hidden');
             audioContainer.classList.add('hidden');
             textRes.innerHTML = '';
+            
+            // Stop previous audio if playing
+            audioRes.pause();
+            audioRes.currentTime = 0;
 
             const encodedPrompt = encodeURIComponent(prompt);
             const seed = Math.floor(Math.random() * 999999);
 
             try {
+                // ------------------------------------------------
+                // 🖼️ MODE: IMAGE (ใช้ Fetch เหมือนเดิม เพื่อให้ Download ได้)
+                // ------------------------------------------------
                 if (currentMode === 'image') {
-                    // Pollinations Image URL
                     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
                     
-                    // Fetch blob for better error handling & download support
                     const response = await fetch(url);
                     if(!response.ok) throw new Error("Image API Error");
                     
@@ -218,52 +224,54 @@
                     imgRes.onload = () => {
                         loading.classList.add('hidden');
                         imgContainer.classList.remove('hidden');
-                        
-                        // Setup Download Button
                         dlBtn.href = objectUrl;
                         dlBtn.download = `wisdom-ai-${seed}.jpg`;
-                        
                         generateMathQuestion(); 
                     };
                 } 
                 
+                // ------------------------------------------------
+                // 📝 MODE: TEXT (ใช้ Fetch ปกติ)
+                // ------------------------------------------------
                 else if (currentMode === 'text') {
-                    // Fetch Text
                     const response = await fetch(`https://text.pollinations.ai/${encodedPrompt}?seed=${seed}&model=openai`);
                     if(!response.ok) throw new Error("Text API Error");
                     
                     const text = await response.text();
-                    
                     loading.classList.add('hidden');
                     textRes.classList.remove('hidden');
-                    // Format lines
                     textRes.innerHTML = text.replace(/\n/g, '<br>');
                     generateMathQuestion();
                 } 
                 
+                // ------------------------------------------------
+                // 🎧 MODE: AUDIO (แก้กลับเป็น Direct Link เพื่อแก้ปัญหา CORS)
+                // ------------------------------------------------
                 else if (currentMode === 'audio') {
                     const voice = document.getElementById('voiceSelect').value;
-                    const url = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&voice=${voice}`;
+                    // สร้าง URL ตรงๆ
+                    const url = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&voice=${voice}&seed=${seed}`;
                     
-                    // Fetch Audio Blob
-                    const response = await fetch(url);
-                    if(!response.ok) throw new Error("Audio API Error");
+                    // ตั้งค่า src ให้เครื่องเล่นโดยตรง (ไม่ใช้ fetch)
+                    audioRes.src = url;
                     
-                    const blob = await response.blob();
-                    const audioObjectUrl = URL.createObjectURL(blob);
-                    
-                    audioRes.src = audioObjectUrl;
-                    
-                    loading.classList.add('hidden');
-                    audioContainer.classList.remove('hidden');
-                    
-                    // Try to auto-play
-                    try {
-                        await audioRes.play();
-                    } catch (e) {
-                        console.log("Auto-play prevented by browser, user must click play.");
-                    }
-                    generateMathQuestion();
+                    // รอจนกว่าจะโหลดข้อมูลเบื้องต้นได้
+                    audioRes.onloadeddata = () => {
+                        loading.classList.add('hidden');
+                        audioContainer.classList.remove('hidden');
+                        
+                        // พยายามเล่นเสียง
+                        audioRes.play().catch(e => {
+                            console.log("Autoplay blocked (User interaction needed)");
+                        });
+                        generateMathQuestion();
+                    };
+
+                    // ดัก Error ถ้าโหลดไม่ขึ้น
+                    audioRes.onerror = () => {
+                        console.error("Audio Load Error");
+                        throwError();
+                    };
                 }
 
             } catch (error) {
@@ -271,7 +279,6 @@
                 throwError();
             }
         }
-
         function throwError() {
             const loading = document.getElementById('loading');
             const placeholder = document.getElementById('placeholderText');
